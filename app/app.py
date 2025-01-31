@@ -10,7 +10,8 @@ app = Flask(__name__)
 CORS(app)
 
 # Load the pre-trained model (make sure the model file is in the correct path)
-model = tf.keras.models.load_model('/model/digits_recognition_cnn.h5')
+model = tf.keras.models.load_model('models/digits_recognition_cnn.h5')
+
 
 # Preprocessing function to convert image data to the right format for the model
 def preprocess_image(image_bytes):

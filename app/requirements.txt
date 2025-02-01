@@ -1,5 +1,6 @@
 tensorflow
-fastapi
+flask
+flask-cors
 numpy
 pillow
-uvicorn
+gunicorn  

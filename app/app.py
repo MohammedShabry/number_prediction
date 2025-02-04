@@ -1,42 +1,55 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
-import tensorflow as tf
 import numpy as np
-from PIL import Image
-import io
+import cv2
+import tensorflow as tf
+from tensorflow.keras.models import load_model
+from werkzeug.utils import secure_filename
+import os
 
-# Initialize the Flask app and enable CORS
 app = Flask(__name__)
-CORS(app)
+model = load_model("models/digits_recognition_cnn.h5")  # Load trained model
 
-# Load the pre-trained model (make sure the model file is in the correct path)
-model = tf.keras.models.load_model('models/digits_recognition_cnn.h5')
+UPLOAD_FOLDER = "uploads"
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
-
-# Preprocessing function to convert image data to the right format for the model
-def preprocess_image(image_bytes):
-    image = Image.open(io.BytesIO(image_bytes)).convert('L')  # Convert to grayscale
-    image = image.resize((28, 28))  # Resize image to 28x28
-    image = np.array(image) / 255.0  # Normalize pixel values to [0, 1]
-    image = image.reshape(1, 28, 28, 1)  # Reshape to match input shape
-    return image
-
-# Prediction endpoint
-@app.route('/predict', methods=['POST'])
+@app.route("/predict", methods=["POST"])
 def predict():
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image provided'}), 400
-    
-    file = request.files['image']
-    image_bytes = file.read()
-    image = preprocess_image(image_bytes)
-    
-    prediction = model.predict(image)
-    predicted_number = int(np.argmax(prediction))  # Get the digit with the highest probability
-    
-    return jsonify({'prediction': predicted_number})
+    print("Received request headers:", request.headers)  # Debugging
+    print("Received request files:", request.files)  # Debugging
 
-# Start the Flask app
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+    if "image" not in request.files:
+        return jsonify({"error": "No image uploaded"}), 400
 
+    file = request.files["image"]
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(filepath)
+
+    # Process the image
+    image = cv2.imread(filepath, cv2.IMREAD_COLOR)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    contours = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
+    
+    # Sort contours from left to right
+    contours = sorted(contours, key=lambda c: cv2.boundingRect(c)[0])  
+
+    predictions = []
+    for cnt in contours:
+        x, y, w, h = cv2.boundingRect(cnt)
+        digit = th[y:y + h, x:x + w]
+        resized_digit = cv2.resize(digit, (18, 18))
+        padded_digit = np.pad(resized_digit, ((5, 5), (5, 5)), "constant", constant_values=0)
+
+        digit = padded_digit.reshape(1, 28, 28, 1).astype("float32") / 255.0
+        pred = model.predict([digit])[0]
+        final_pred = np.argmax(pred)
+        predictions.append({"digit": int(final_pred), "confidence": float(max(pred))})
+
+    os.remove(filepath)  # Clean up after processing
+    return jsonify({"predictions": predictions})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)

@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 import os
 
 app = Flask(__name__)
-model = load_model("models/digits_recognition_cnn.h5")  # Load trained model
+model = load_model("models/mnist_data2.h5")  
 
 UPLOAD_FOLDER = "uploads"
 if not os.path.exists(UPLOAD_FOLDER):
@@ -52,4 +52,4 @@ def predict():
     return jsonify({"predictions": predictions})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=True)
